@@ -1,11 +1,14 @@
 package com.amine.naimi.mapsindoortest;
 
+import android.Manifest;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -13,6 +16,14 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.DexterError;
+import com.karumi.dexter.listener.PermissionDeniedResponse;
+import com.karumi.dexter.listener.PermissionGrantedResponse;
+import com.karumi.dexter.listener.PermissionRequest;
+import com.karumi.dexter.listener.PermissionRequestErrorListener;
+import com.karumi.dexter.listener.single.PermissionListener;
 import com.mapspeople.data.OnDataReadyListener;
 import com.mapspeople.debug.dbglog;
 import com.mapspeople.mapcontrol.MapControl;
@@ -33,6 +44,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements   OnDataReadyListener {
@@ -46,6 +58,7 @@ public class MainActivity extends AppCompatActivity implements   OnDataReadyList
     private AppConfig settings;
     private Point START_POSITION = new Point();
 
+    String TAG = "DEXTER LOG";
 
     private static Map<String, Object> locationTypeImages = new HashMap<>();
 
@@ -56,22 +69,23 @@ public class MainActivity extends AppCompatActivity implements   OnDataReadyList
     SupportMapFragment mapFragment;
     GPSPositionProvider gpsProvider;
 
+    PermissionListener mLocationPermissionListener;
+    PermissionRequestErrorListener mLocationPermissionRequestErrorListener;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         dbglog.useDebug(true);
-        mapFragment = ((SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map_fragment));
-
-        mapFragment.getMapAsync(new OnMapReadyCallback() {
-            @Override
-            public void onMapReady(GoogleMap googleMap) {
-                mMap = googleMap;
-                setupMapIfNeeded();
-            }
-        });
 
 
+        createPermissionListeners();
+
+        Dexter.withActivity(this)
+                .withPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                .withListener(mLocationPermissionListener)
+                .withErrorListener(mLocationPermissionRequestErrorListener)
+                .check();
     }
 
 
@@ -208,6 +222,49 @@ public class MainActivity extends AppCompatActivity implements   OnDataReadyList
                 }
             }
         }.start();
+    }
+
+
+    private void createPermissionListeners()
+    {
+        mLocationPermissionListener = new PermissionListener() {
+            @Override
+            public void onPermissionGranted( PermissionGrantedResponse permissionGrantedResponse ) {
+
+                mapFragment = ((SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map_fragment));
+
+                mapFragment.getMapAsync(new OnMapReadyCallback() {
+                    @Override
+                    public void onMapReady(GoogleMap googleMap) {
+                        mMap = googleMap;
+                        setupMapIfNeeded();
+                    }
+                });
+            }
+
+            @Override
+            public void onPermissionDenied( PermissionDeniedResponse permissionDeniedResponse ) {
+                finish();
+                System.exit(0);
+                Log.d( TAG, "Dexter.onPermissionDenied: User has denied permissions and selected 'Never ask again'" );
+
+
+            }
+
+            @Override
+            public void onPermissionRationaleShouldBeShown(PermissionRequest permissionRequest, PermissionToken permissionToken ) {
+                permissionToken.continuePermissionRequest();
+                Log.d( TAG, "Should be shown again" );
+
+            }
+        };
+
+        mLocationPermissionRequestErrorListener = new PermissionRequestErrorListener() {
+            @Override
+            public void onError( DexterError dexterError ) {
+                Log.d( TAG, String.format( Locale.US, "Dexter.onError: %s", dexterError ) );
+            }
+        };
     }
 
 }
